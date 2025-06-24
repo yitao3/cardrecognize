@@ -1,20 +1,79 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import Image from "next/image";
 
 interface RecognitionResult {
-  role: string;
-  type: string;
-  text: string;
+  country?: string;
+  name?: string;
+  position?: string;
+  company?: string;
+  phone?: string;
+  error?: string;
+}
+
+function PasswordScreen({ onPasswordSubmit }: { onPasswordSubmit: (password: string) => Promise<boolean> }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const success = await onPasswordSubmit(password);
+    if (!success) {
+      setError('密码错误，请重试');
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <form onSubmit={handleSubmit} className="p-8 bg-white rounded-lg shadow-md">
+        <h2 className="text-2xl font-bold mb-4 text-center">请输入密码</h2>
+        <div className="mb-4">
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700">密码</label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+        {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+        <button type="submit" className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+          进入
+        </button>
+      </form>
+    </div>
+  );
 }
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [files, setFiles] = useState<(File & { preview: string })[]>([]);
-  const [results, setResults] = useState<Record<string, string>>({});
+  const [results, setResults] = useState<Record<string, RecognitionResult>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const sessionAuth = sessionStorage.getItem('isAuthenticated');
+    if (sessionAuth === 'true') {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handlePasswordSubmit = async (password: string) => {
+    try {
+      await axios.post('/api/verify-password', { password });
+      sessionStorage.setItem('isAuthenticated', 'true');
+      setIsAuthenticated(true);
+      return true;
+    } catch (error) {
+      console.error('Password verification failed:', error);
+      return false;
+    }
+  };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles(prevFiles => [
@@ -41,7 +100,13 @@ export default function Home() {
       const response = await axios.post('/api/recognize', formData);
       const content = response.data.choices[0].message.content;
       
-      setResults(prev => ({ ...prev, [file.name]: content }));
+      try {
+        const parsedContent = JSON.parse(content);
+        setResults(prev => ({ ...prev, [file.name]: parsedContent }));
+      } catch (e) {
+        console.error("Failed to parse JSON response:", e, "Content:", content);
+        setResults(prev => ({ ...prev, [file.name]: { error: '返回结果格式错误' } }));
+      }
 
     } catch (error: any) {
       console.error('Recognition failed:', error);
@@ -53,7 +118,7 @@ export default function Home() {
       } else if (apiError) {
         displayError += `: ${apiError}`;
       }
-      setResults(prev => ({ ...prev, [file.name]: displayError }));
+      setResults(prev => ({ ...prev, [file.name]: { error: displayError } }));
     } finally {
       setLoading(prev => ({ ...prev, [file.name]: false }));
     }
@@ -65,6 +130,8 @@ export default function Home() {
         handleRecognize(file);
       }
     });
+    setResults({});
+    setLoading({});
   };
 
   const handleClearAll = () => {
@@ -73,6 +140,10 @@ export default function Home() {
     setResults({});
     setLoading({});
   };
+
+  if (!isAuthenticated) {
+    return <PasswordScreen onPasswordSubmit={handlePasswordSubmit} />;
+  }
 
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
@@ -130,14 +201,22 @@ export default function Home() {
                 <thead>
                   <tr className="bg-gray-100">
                     <th className="px-4 py-2 border border-gray-300">图片名</th>
+                    <th className="px-4 py-2 border border-gray-300">国家</th>
+                    <th className="px-4 py-2 border border-gray-300">姓名</th>
+                    <th className="px-4 py-2 border border-gray-300">职位</th>
+                    <th className="px-4 py-2 border border-gray-300">企业名称</th>
                     <th className="px-4 py-2 border border-gray-300">提取的号码</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(results).map(([fileName, number]) => (
+                  {Object.entries(results).map(([fileName, info]) => (
                     <tr key={fileName}>
                       <td className="px-4 py-2 border border-gray-300">{fileName}</td>
-                      <td className="px-4 py-2 border border-gray-300 font-mono">{number}</td>
+                      <td className="px-4 py-2 border border-gray-300">{info.country || ''}</td>
+                      <td className="px-4 py-2 border border-gray-300">{info.name || ''}</td>
+                      <td className="px-4 py-2 border border-gray-300">{info.position || ''}</td>
+                      <td className="px-4 py-2 border border-gray-300">{info.company || ''}</td>
+                      <td className="px-4 py-2 border border-gray-300 font-mono">{info.phone || info.error || ''}</td>
                     </tr>
                   ))}
                 </tbody>
