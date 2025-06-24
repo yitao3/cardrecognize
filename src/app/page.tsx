@@ -55,6 +55,7 @@ export default function Home() {
   const [files, setFiles] = useState<(File & { preview: string })[]>([]);
   const [results, setResults] = useState<Record<string, RecognitionResult>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [isRecognizingAll, setIsRecognizingAll] = useState(false);
 
   useEffect(() => {
     const sessionAuth = sessionStorage.getItem('isAuthenticated');
@@ -128,14 +129,14 @@ export default function Home() {
     }
   };
 
-  const handleRecognizeAll = () => {
-    files.forEach(file => {
+  const handleRecognizeAll = async () => {
+    setIsRecognizingAll(true);
+    for (const file of files) {
       if (!results[file.name]) {
-        handleRecognize(file);
+        await handleRecognize(file);
       }
-    });
-    setResults({});
-    setLoading({});
+    }
+    setIsRecognizingAll(false);
   };
 
   const handleClearAll = () => {
@@ -167,9 +168,9 @@ export default function Home() {
               <button
                 onClick={handleRecognizeAll}
                 className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
-                disabled={Object.values(loading).some(v => v)}
+                disabled={isRecognizingAll || Object.values(loading).some(v => v)}
               >
-                {Object.values(loading).some(v => v) ? '识别中...' : '全部识别'}
+                {isRecognizingAll ? '识别中...' : '全部识别'}
               </button>
               <button
                 onClick={handleClearAll}

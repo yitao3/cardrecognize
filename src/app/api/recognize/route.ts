@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 
+export const maxDuration = 60; // 60 seconds
+
 const DOUBAO_API_KEY = process.env.DOUBAO_API_KEY;
 const DOUBAO_API_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
 
