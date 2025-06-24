@@ -108,15 +108,19 @@ export default function Home() {
         setResults(prev => ({ ...prev, [file.name]: { error: '返回结果格式错误' } }));
       }
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Recognition failed:', error);
-      const errorMessage = error.response?.data?.error || '识别失败';
-      const apiError = error.response?.data?.apiError;
-      let displayError = errorMessage;
-      if (apiError && typeof apiError === 'object') {
-        displayError += `: ${JSON.stringify(apiError)}`;
-      } else if (apiError) {
-        displayError += `: ${apiError}`;
+      let displayError = '识别失败';
+
+      if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.error || '识别失败';
+        const apiError = error.response?.data?.apiError;
+        displayError = errorMessage;
+        if (apiError && typeof apiError === 'object') {
+          displayError += `: ${JSON.stringify(apiError)}`;
+        } else if (apiError) {
+          displayError += `: ${apiError}`;
+        }
       }
       setResults(prev => ({ ...prev, [file.name]: { error: displayError } }));
     } finally {
@@ -179,7 +183,9 @@ export default function Home() {
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {files.map(file => (
               <div key={file.name} className="border rounded-lg overflow-hidden shadow-lg bg-white">
-                <img src={file.preview} alt={file.name} className="w-full h-40 object-cover" />
+                <div className="relative w-full h-40">
+                  <Image src={file.preview} alt={file.name} fill style={{ objectFit: 'cover' }} />
+                </div>
                 <div className="p-4">
                   <p className="text-sm font-semibold truncate">{file.name}</p>
                   <button
