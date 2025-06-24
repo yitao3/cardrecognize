@@ -52,10 +52,10 @@ function PasswordScreen({ onPasswordSubmit }: { onPasswordSubmit: (password: str
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isRecognizingAll, setIsRecognizingAll] = useState(false);
   const [files, setFiles] = useState<(File & { preview: string })[]>([]);
   const [results, setResults] = useState<Record<string, RecognitionResult>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
-  const [isRecognizingAll, setIsRecognizingAll] = useState(false);
 
   useEffect(() => {
     const sessionAuth = sessionStorage.getItem('isAuthenticated');
@@ -109,19 +109,15 @@ export default function Home() {
         setResults(prev => ({ ...prev, [file.name]: { error: '返回结果格式错误' } }));
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Recognition failed:', error);
-      let displayError = '识别失败';
-
-      if (axios.isAxiosError(error)) {
-        const errorMessage = error.response?.data?.error || '识别失败';
-        const apiError = error.response?.data?.apiError;
-        displayError = errorMessage;
-        if (apiError && typeof apiError === 'object') {
-          displayError += `: ${JSON.stringify(apiError)}`;
-        } else if (apiError) {
-          displayError += `: ${apiError}`;
-        }
+      const errorMessage = error.response?.data?.error || '识别失败';
+      const apiError = error.response?.data?.apiError;
+      let displayError = errorMessage;
+      if (apiError && typeof apiError === 'object') {
+        displayError += `: ${JSON.stringify(apiError)}`;
+      } else if (apiError) {
+        displayError += `: ${apiError}`;
       }
       setResults(prev => ({ ...prev, [file.name]: { error: displayError } }));
     } finally {
@@ -131,12 +127,17 @@ export default function Home() {
 
   const handleRecognizeAll = async () => {
     setIsRecognizingAll(true);
-    for (const file of files) {
-      if (!results[file.name]) {
-        await handleRecognize(file);
-      }
+    const recognitionPromises = files
+      .filter(file => !results[file.name])
+      .map(file => handleRecognize(file));
+
+    try {
+      await Promise.all(recognitionPromises);
+    } catch (error) {
+      console.error("An error occurred during batch recognition:", error);
+    } finally {
+      setIsRecognizingAll(false);
     }
-    setIsRecognizingAll(false);
   };
 
   const handleClearAll = () => {
@@ -149,6 +150,9 @@ export default function Home() {
   if (!isAuthenticated) {
     return <PasswordScreen onPasswordSubmit={handlePasswordSubmit} />;
   }
+
+  const isAnyLoading = isRecognizingAll || Object.values(loading).some(v => v);
+  const allRecognized = files.length > 0 && files.every(file => !!results[file.name]);
 
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
@@ -168,9 +172,9 @@ export default function Home() {
               <button
                 onClick={handleRecognizeAll}
                 className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-blue-300"
-                disabled={isRecognizingAll || Object.values(loading).some(v => v)}
+                disabled={isAnyLoading || allRecognized}
               >
-                {isRecognizingAll ? '识别中...' : '全部识别'}
+                {isAnyLoading ? '识别中...' : (allRecognized ? '全部已识别' : '全部识别')}
               </button>
               <button
                 onClick={handleClearAll}
@@ -184,9 +188,7 @@ export default function Home() {
           <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {files.map(file => (
               <div key={file.name} className="border rounded-lg overflow-hidden shadow-lg bg-white">
-                <div className="relative w-full h-40">
-                  <Image src={file.preview} alt={file.name} fill style={{ objectFit: 'cover' }} />
-                </div>
+                <img src={file.preview} alt={file.name} className="w-full h-40 object-cover" />
                 <div className="p-4">
                   <p className="text-sm font-semibold truncate">{file.name}</p>
                   <button
