@@ -54,15 +54,15 @@ function PasswordScreen({ onPasswordSubmit }: { onPasswordSubmit: (password: str
 async function runWithConcurrency<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
   const results: T[] = [];
   let index = 0;
-  let running: Promise<void>[] = [];
+  const running: Promise<void>[] = [];
 
   async function runOne() {
     if (index >= tasks.length) return;
     const curIndex = index++;
     try {
       results[curIndex] = await tasks[curIndex]();
-    } catch (e) {
-      results[curIndex] = undefined as any;
+    } catch {
+      results[curIndex] = undefined as unknown as T;
     }
     await runOne();
   }
