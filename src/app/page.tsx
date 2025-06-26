@@ -50,6 +50,30 @@ function PasswordScreen({ onPasswordSubmit }: { onPasswordSubmit: (password: str
   );
 }
 
+// 并发池工具函数
+async function runWithConcurrency<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
+  const results: T[] = [];
+  let index = 0;
+  let running: Promise<void>[] = [];
+
+  async function runOne() {
+    if (index >= tasks.length) return;
+    const curIndex = index++;
+    try {
+      results[curIndex] = await tasks[curIndex]();
+    } catch (e) {
+      results[curIndex] = undefined as any;
+    }
+    await runOne();
+  }
+
+  for (let i = 0; i < Math.min(concurrency, tasks.length); i++) {
+    running.push(runOne());
+  }
+  await Promise.all(running);
+  return results;
+}
+
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isRecognizingAll, setIsRecognizingAll] = useState(false);
@@ -130,12 +154,10 @@ export default function Home() {
 
   const handleRecognizeAll = async () => {
     setIsRecognizingAll(true);
-    const recognitionPromises = files
-      .filter(file => !results[file.name])
-      .map(file => handleRecognize(file));
-
+    const filesToRecognize = files.filter(file => !results[file.name]);
+    const tasks = filesToRecognize.map(file => () => handleRecognize(file));
     try {
-      await Promise.all(recognitionPromises);
+      await runWithConcurrency(tasks, 5);
     } catch (error) {
       console.error("An error occurred during batch recognition:", error);
     } finally {
